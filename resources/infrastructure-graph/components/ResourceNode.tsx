@@ -26,8 +26,11 @@ type Category =
   | "other";
 
 function getCategory(resourceType: string): Category {
-  // resourceType looks like "aws:ec2/vpc:Vpc" — pull out the middle segment
+  // resourceType looks like "aws:ec2/vpc:Vpc" or "gcp:compute/network:Network"
+  // pull out the middle segment (module name)
   const mid = resourceType.split(":")[1]?.split("/")[0] ?? "";
+
+  // AWS
   if (["ec2", "vpc"].includes(mid)) return "networking";
   if (["lambda", "ecs", "eks", "batch", "apprunner"].includes(mid)) return "compute";
   if (["s3", "efs", "fsx", "glacier"].includes(mid)) return "storage";
@@ -38,6 +41,19 @@ function getCategory(resourceType: string): Category {
   if (["apigateway", "apigatewayv2"].includes(mid)) return "api";
   if (["sns", "sqs", "kinesis", "eventbridge", "ses"].includes(mid)) return "messaging";
   if (["ecr"].includes(mid)) return "containers";
+
+  // GCP
+  if (["compute"].includes(mid)) return "networking";   // covers VPC, subnets, firewall, LB, instances
+  if (["cloudrun", "cloudfunctions", "cloudfunctionsv2"].includes(mid)) return "compute";
+  if (["storage"].includes(mid)) return "storage";
+  if (["sql", "redis", "memcache", "bigtable", "firestore", "spanner"].includes(mid)) return "database";
+  if (["bigquery"].includes(mid)) return "database";
+  if (["dns"].includes(mid)) return "dns";
+  if (["pubsub"].includes(mid)) return "messaging";
+  if (["container"].includes(mid)) return "containers";  // GKE
+  if (["artifactregistry"].includes(mid)) return "containers";
+  if (["projects", "secretmanager"].includes(mid)) return "iam";
+
   return "other";
 }
 

@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@openai/apps-sdk-ui": "^0.2.1",
+    "@pulumi/gcp": "^9.12.0",
     "@pulumi/pulumi": "^3.223.0",
     "@xyflow/react": "^12.10.1",
     "dagre": "^0.8.5",

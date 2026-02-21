@@ -18,6 +18,7 @@ interface ParsedUrn {
 }
 
 const displayNameMap: Record<string, string> = {
+  // ── AWS ──────────────────────────────────────────────────────────────────
   "aws:s3/bucket:Bucket": "S3 Bucket",
   "aws:s3/bucketV2:BucketV2": "S3 Bucket",
   "aws:ec2/instance:Instance": "EC2 Instance",
@@ -56,6 +57,42 @@ const displayNameMap: Record<string, string> = {
   "aws:sqs/queue:Queue": "SQS Queue",
   "aws:dynamodb/table:Table": "DynamoDB Table",
   "aws:cognito/userPool:UserPool": "Cognito User Pool",
+
+  // ── GCP ──────────────────────────────────────────────────────────────────
+  "gcp:compute/instance:Instance": "Compute Instance",
+  "gcp:compute/network:Network": "VPC Network",
+  "gcp:compute/subnetwork:Subnetwork": "Subnet",
+  "gcp:compute/firewall:Firewall": "Firewall Rule",
+  "gcp:compute/globalAddress:GlobalAddress": "Global IP",
+  "gcp:compute/address:Address": "Static IP",
+  "gcp:compute/router:Router": "Cloud Router",
+  "gcp:compute/routerNat:RouterNat": "Cloud NAT",
+  "gcp:compute/backendService:BackendService": "Backend Service",
+  "gcp:compute/urlMap:UrlMap": "URL Map",
+  "gcp:compute/targetHttpsProxy:TargetHttpsProxy": "HTTPS Proxy",
+  "gcp:compute/globalForwardingRule:GlobalForwardingRule": "Load Balancer",
+  "gcp:storage/bucket:Bucket": "GCS Bucket",
+  "gcp:sql/databaseInstance:DatabaseInstance": "Cloud SQL",
+  "gcp:sql/database:Database": "SQL Database",
+  "gcp:sql/user:User": "SQL User",
+  "gcp:redis/instance:Instance": "Memorystore Redis",
+  "gcp:memcache/instance:Instance": "Memorystore Memcache",
+  "gcp:cloudfunctions/function:Function": "Cloud Function",
+  "gcp:cloudfunctionsv2/function:Function": "Cloud Function v2",
+  "gcp:cloudrun/service:Service": "Cloud Run",
+  "gcp:container/cluster:Cluster": "GKE Cluster",
+  "gcp:container/nodePool:NodePool": "GKE Node Pool",
+  "gcp:bigquery/dataset:Dataset": "BigQuery Dataset",
+  "gcp:bigquery/table:Table": "BigQuery Table",
+  "gcp:pubsub/topic:Topic": "Pub/Sub Topic",
+  "gcp:pubsub/subscription:Subscription": "Pub/Sub Subscription",
+  "gcp:dns/managedZone:ManagedZone": "Cloud DNS Zone",
+  "gcp:dns/recordSet:RecordSet": "DNS Record",
+  "gcp:iam/serviceAccount:ServiceAccount": "Service Account",
+  "gcp:projects/iAMMember:IAMMember": "IAM Binding",
+  "gcp:secretmanager/secret:Secret": "Secret",
+  "gcp:secretmanager/secretVersion:SecretVersion": "Secret Version",
+  "gcp:artifactregistry/repository:Repository": "Artifact Registry",
 };
 
 function parseUrn(urn: string): ParsedUrn {
