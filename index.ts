@@ -1,14 +1,34 @@
 import { MCPServer, object, text, widget } from "mcp-use/server";
+import { randomUUID } from "crypto";
 import { z } from "zod";
+import { generatePulumiCode, updatePulumiCode } from "./src/generate-code.js";
+import {
+  buildGraphFromEvents,
+  type PreviewEvent,
+} from "./src/graph-converter.js";
+import {
+  checkSubprocessSupport,
+  parseResourcesFromCode,
+  runDeploy,
+  runPreview,
+  writeProgram,
+} from "./src/pulumi-stack.js";
+import { estimateMonthlyCost, totalEstimatedCost } from "./src/cost-estimator.js";
+import { getStack, setStack } from "./src/stack-store.js";
+
+// ---------------------------------------------------------------------------
+// Server setup
+// ---------------------------------------------------------------------------
 
 const server = new MCPServer({
   name: "yc-mcp-use-hackathon-26",
-  title: "yc-mcp-use-hackathon-26", // display name
+  title: "Infrastructure Visualizer",
   version: "1.0.0",
-  description: "MCP server with MCP Apps integration",
-  baseUrl: process.env.MCP_URL || "http://localhost:3000", // Full base URL (e.g., https://myserver.com)
+  description:
+    "Design and visualize cloud infrastructure through natural language. Generates Pulumi TypeScript programs and renders interactive React Flow graphs.",
+  baseUrl: process.env.MCP_URL || "http://localhost:3000",
   favicon: "favicon.ico",
-  websiteUrl: "https://mcp-use.com", // Can be customized later
+  websiteUrl: "https://mcp-use.com",
   icons: [
     {
       src: "icon.svg",
@@ -18,91 +38,256 @@ const server = new MCPServer({
   ],
 });
 
-/**
- * TOOL THAT RETURNS A WIDGET
- * The `widget` config tells mcp-use which widget component to render.
- * The `widget()` helper in the handler passes props to that component.
- * Docs: https://mcp-use.com/docs/typescript/server/mcp-apps
- */
+// Check subprocess support at startup (cached)
+let subprocessSupported = false;
+checkSubprocessSupport().then((result) => {
+  subprocessSupported = result;
+  console.log(
+    `Pulumi subprocess support: ${result ? "enabled" : "disabled (static parser fallback)"}`
+  );
+});
 
-// Fruits data — color values are Tailwind bg-[] classes used by the carousel UI
-const fruits = [
-  { fruit: "mango", color: "bg-[#FBF1E1] dark:bg-[#FBF1E1]/10" },
-  { fruit: "pineapple", color: "bg-[#f8f0d9] dark:bg-[#f8f0d9]/10" },
-  { fruit: "cherries", color: "bg-[#E2EDDC] dark:bg-[#E2EDDC]/10" },
-  { fruit: "coconut", color: "bg-[#fbedd3] dark:bg-[#fbedd3]/10" },
-  { fruit: "apricot", color: "bg-[#fee6ca] dark:bg-[#fee6ca]/10" },
-  { fruit: "blueberry", color: "bg-[#e0e6e6] dark:bg-[#e0e6e6]/10" },
-  { fruit: "grapes", color: "bg-[#f4ebe2] dark:bg-[#f4ebe2]/10" },
-  { fruit: "watermelon", color: "bg-[#e6eddb] dark:bg-[#e6eddb]/10" },
-  { fruit: "orange", color: "bg-[#fdebdf] dark:bg-[#fdebdf]/10" },
-  { fruit: "avocado", color: "bg-[#ecefda] dark:bg-[#ecefda]/10" },
-  { fruit: "apple", color: "bg-[#F9E7E4] dark:bg-[#F9E7E4]/10" },
-  { fruit: "pear", color: "bg-[#f1f1cf] dark:bg-[#f1f1cf]/10" },
-  { fruit: "plum", color: "bg-[#ece5ec] dark:bg-[#ece5ec]/10" },
-  { fruit: "banana", color: "bg-[#fdf0dd] dark:bg-[#fdf0dd]/10" },
-  { fruit: "strawberry", color: "bg-[#f7e6df] dark:bg-[#f7e6df]/10" },
-  { fruit: "lemon", color: "bg-[#feeecd] dark:bg-[#feeecd]/10" },
-];
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function generateGraph(
+  pulumiCode: string,
+  stackId: string,
+  workDir: string
+) {
+  let events: PreviewEvent[];
+  try {
+    writeProgram(workDir, pulumiCode);
+    events = await runPreview(stackId, workDir);
+  } catch {
+    events = parseResourcesFromCode(pulumiCode);
+  }
+
+  const { nodes, edges } = buildGraphFromEvents(events);
+
+  const enrichedNodes = nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      estimatedCost: estimateMonthlyCost(node.data.resourceType),
+    },
+  }));
+
+  const cost = totalEstimatedCost(enrichedNodes.map((n) => n.data.resourceType));
+  return { nodes: enrichedNodes, edges, cost };
+}
+
+// ---------------------------------------------------------------------------
+// Tool: generate_infrastructure
+// ---------------------------------------------------------------------------
 
 server.tool(
   {
-    name: "search-tools",
-    description: "Search for fruits and display the results in a visual widget",
+    name: "generate_infrastructure",
+    description:
+      "Generate an interactive cloud infrastructure diagram from a natural language description. Use this when the user wants to design, plan, or visualize cloud infrastructure.",
     schema: z.object({
-      query: z.string().optional().describe("Search query to filter fruits"),
+      description: z
+        .string()
+        .describe(
+          "Natural language description of the infrastructure, e.g. 'A Next.js app with Postgres database and S3 file storage'"
+        ),
     }),
     widget: {
-      name: "product-search-result",
-      invoking: "Searching...",
-      invoked: "Results loaded",
+      name: "infrastructure-graph",
+      invoking: "Generating infrastructure…",
+      invoked: "Infrastructure graph ready",
     },
   },
-  async ({ query }) => {
-    const results = fruits.filter(
-      (f) => !query || f.fruit.toLowerCase().includes(query.toLowerCase())
-    );
+  async ({ description }) => {
+    const stackId = randomUUID().replace(/-/g, "").slice(0, 10);
+    const workDir = `/tmp/infra-${stackId}`;
 
-    // let's emulate a delay to show the loading state
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const pulumiCode = await generatePulumiCode(description);
+    const { nodes, edges, cost } = await generateGraph(pulumiCode, stackId, workDir);
+
+    setStack({
+      stackId,
+      pulumiCode,
+      workDir,
+      nodes,
+      edges,
+      deployStatus: "idle",
+      createdAt: new Date().toISOString(),
+    });
 
     return widget({
-      props: { query: query ?? "", results },
+      props: {
+        nodes,
+        edges,
+        stackId,
+        totalEstimatedCost: cost,
+        description,
+        subprocessSupported,
+      },
       output: text(
-        `Found ${results.length} fruits matching "${query ?? "all"}"`
+        `Generated infrastructure with ${nodes.length} resources. Estimated cost: ~$${cost}/mo. Stack ID: ${stackId}`
       ),
     });
   }
 );
 
+// ---------------------------------------------------------------------------
+// Tool: update_infrastructure
+// ---------------------------------------------------------------------------
+
 server.tool(
   {
-    name: "get-fruit-details",
-    description: "Get detailed information about a specific fruit",
+    name: "update_infrastructure",
+    description:
+      "Update an existing infrastructure diagram based on a change description. Use this when the user wants to add, remove, or modify resources in an existing design.",
     schema: z.object({
-      fruit: z.string().describe("The fruit name"),
+      change_description: z
+        .string()
+        .describe(
+          "Description of the change to make, e.g. 'Add a Redis cache cluster' or 'Replace RDS with DynamoDB'"
+        ),
+      stack_id: z
+        .string()
+        .describe("The stack ID returned by generate_infrastructure"),
     }),
-    outputSchema: z.object({
-      fruit: z.string(),
-      color: z.string(),
-      facts: z.array(z.string()),
-    }),
+    widget: {
+      name: "infrastructure-graph",
+      invoking: "Updating infrastructure…",
+      invoked: "Infrastructure updated",
+    },
   },
-  async ({ fruit }) => {
-    const found = fruits.find(
-      (f) => f.fruit?.toLowerCase() === fruit?.toLowerCase()
-    );
-    return object({
-      fruit: found?.fruit ?? fruit,
-      color: found?.color ?? "unknown",
-      facts: [
-        `${fruit} is a delicious fruit`,
-        `Color: ${found?.color ?? "unknown"}`,
-      ],
+  async ({ change_description, stack_id }) => {
+    const record = getStack(stack_id);
+    if (!record) {
+      return text(
+        `Error: Stack "${stack_id}" not found. Please call generate_infrastructure first.`
+      );
+    }
+
+    const newCode = await updatePulumiCode(record.pulumiCode, change_description);
+    const { nodes, edges, cost } = await generateGraph(newCode, stack_id, record.workDir);
+
+    setStack({
+      ...record,
+      pulumiCode: newCode,
+      nodes,
+      edges,
+    });
+
+    return widget({
+      props: {
+        nodes,
+        edges,
+        stackId: stack_id,
+        totalEstimatedCost: cost,
+        description: change_description,
+        subprocessSupported,
+      },
+      output: text(
+        `Updated infrastructure: ${nodes.length} resources, ~$${cost}/mo. Stack ID: ${stack_id}`
+      ),
     });
   }
 );
 
+// ---------------------------------------------------------------------------
+// Tool: deploy
+// ---------------------------------------------------------------------------
+
+server.tool(
+  {
+    name: "deploy",
+    description:
+      "Deploy a generated infrastructure stack to AWS using Pulumi. Called by the infrastructure graph widget's Deploy button.",
+    schema: z.object({
+      stackId: z.string().describe("The stack ID to deploy"),
+    }),
+  },
+  async ({ stackId }) => {
+    const record = getStack(stackId);
+    if (!record) {
+      return object({
+        status: "failed",
+        message: `Stack "${stackId}" not found`,
+        logs: [],
+      });
+    }
+
+    if (!subprocessSupported) {
+      return object({
+        status: "failed",
+        message:
+          "Deploy is not supported in this environment (subprocess blocked). Visualization is still available.",
+        logs: [
+          "[error] Pulumi subprocess is not supported in this sandbox environment.",
+        ],
+      });
+    }
+
+    const logs: string[] = [];
+    try {
+      setStack({ ...record, deployStatus: "deploying" });
+
+      await runDeploy(record.workDir, stackId, (line) => {
+        logs.push(line.trim());
+      });
+
+      setStack({ ...record, deployStatus: "deployed" });
+
+      const created = logs.filter(
+        (l) => l.toLowerCase().includes("created") || l.includes("+")
+      ).length;
+
+      return object({
+        status: "deployed",
+        message: `Deployed successfully. ~${created} resources created.`,
+        logs,
+      });
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e.message : String(e);
+      logs.push(`[error] ${err}`);
+      setStack({ ...record, deployStatus: "failed" });
+
+      return object({
+        status: "failed",
+        message: `Deploy failed: ${err}`,
+        logs,
+      });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Smoke test (temporary — remove after Manufact Cloud subprocess test)
+// ---------------------------------------------------------------------------
+
+server.tool(
+  {
+    name: "pulumi_smoke_test",
+    description:
+      "Test whether Pulumi subprocess execution is supported in this environment",
+    schema: z.object({}),
+  },
+  async () => {
+    try {
+      const { LocalWorkspace } = await import("@pulumi/pulumi/automation");
+      const { mkdirSync, writeFileSync } = await import("fs");
+      const dir = "/tmp/pulumi-smoke-test-manual";
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(`${dir}/Pulumi.yaml`, "name: smoke\nruntime: nodejs\n");
+      await LocalWorkspace.create({ workDir: dir });
+      return text("Pulumi subprocess: CONFIRMED");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return text(`Pulumi subprocess FAILED: ${msg}`);
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+
 server.listen().then(() => {
-  console.log(`Server running`);
+  console.log("Infrastructure Visualizer MCP server running");
 });

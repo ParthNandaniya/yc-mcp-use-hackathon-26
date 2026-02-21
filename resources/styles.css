@@ -39,6 +39,46 @@ a {
   @apply text-info;
 }
 
+/* -------------------------------------------------------------------------
+   React Flow — Controls & MiniMap overrides
+   Tailwind v4 preflight resets SVG fill and removes element backgrounds,
+   which makes the zoom buttons invisible and the minimap a blank square.
+   These rules pin explicit colors so they render correctly in all themes.
+   ------------------------------------------------------------------------- */
+
+.react-flow__controls {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: #ffffff;
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  cursor: pointer;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.react-flow__controls-button:hover {
+  background: #f1f5f9;
+}
+
+.react-flow__controls-button svg {
+  fill: #374151;
+  max-width: 12px;
+  max-height: 12px;
+}
+
+
 /* Carousel scroll container with padding for blur effect */
 .carousel-scroll-container {
   padding-bottom: 2rem;
