@@ -24,7 +24,7 @@ Non-technical founders and indie developers who are shipping projects but lack t
 | State + credential hosting | Pulumi Cloud (free tier) |
 | Remote deployment runner | Pulumi Deployments |
 | Code generation (nested agent) | OpenAI API |
-| Server hosting | Railway / Render / Fly.io |
+| Server hosting | Manufact Cloud |
 
 ---
 
@@ -33,7 +33,7 @@ Non-technical founders and indie developers who are shipping projects but lack t
 ```
 Claude.ai / ChatGPT (web)
         ↕ MCP over HTTPS
-Your hosted MCP Server (Node.js on Railway/Render/Fly.io)
+Your hosted MCP Server (Node.js on Manufact Cloud)
         ↕ OpenAI API          ← generates Pulumi TypeScript code
         ↕ Pulumi Automation API  ← runs preview() and up()
         ↕ Pulumi Cloud API
@@ -107,6 +107,10 @@ Triggered by the Deploy button inside the MCP App UI (not via chat message). Cal
 
 ## Hackathon Scope Notes
 
-The trickiest integration on the day is **Pulumi Deployments** — triggering a remote run and streaming logs back into the MCP App requires a polling loop or webhook. If time is short, a viable fallback for the demo is running `stack.up()` directly on the server process with demo credentials pre-configured, framing Pulumi Deployments as the production path in the pitch.
+**Hosting:** Deploy on Manufact Cloud (the hackathon host's own platform). Connect the GitHub repo and it builds and deploys on every push, with a public HTTPS endpoint and a built-in Inspector for debugging tool calls. This is simpler than self-hosting and is a smart signal to the judges.
 
-The nested agent (OpenAI) is used only for code generation. The user's AI (Claude on claude.ai) handles all conversation, tool invocation decisions, and resource explanation.
+**First task of the day:** Run a minimal `stack.preview()` call on Manufact Cloud as a smoke test before building anything else. The Pulumi Automation API runs Pulumi programs as child processes and needs subprocess capabilities and a writable filesystem — verify the sandbox supports this early. If it doesn't, the fallback is calling the Pulumi Cloud REST API directly to trigger Pulumi Deployments runs, which is pure HTTP and works in any environment.
+
+**Deployment integration:** The trickiest piece is Pulumi Deployments — triggering a remote run and streaming logs back into the MCP App requires a polling loop or webhook. If time is short, a viable fallback for the demo is running `stack.up()` directly on the server process with demo credentials pre-configured, framing Pulumi Deployments as the production path in the pitch.
+
+**Nested agent:** OpenAI is used only for code generation. The user's AI (e.g. Claude on claude.ai) handles all conversation, tool invocation decisions, and resource explanation.
